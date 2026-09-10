@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "emulab_lib",
+    "emulab_gui",
+]
