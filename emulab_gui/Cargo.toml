@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 emulab_lib = { path = "../emulab_lib" }
 iced = { version = "0.14", features = ["tokio"] }
+iced_program = "0.14.0"

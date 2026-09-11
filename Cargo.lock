@@ -696,6 +696,7 @@ version = "0.1.0"
 dependencies = [
  "emulab_lib",
  "iced",
+ "iced_program",
 ]
 
 [[package]]
