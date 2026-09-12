@@ -1,7 +1,8 @@
 mod app;
+mod components;
 
-use crate::app::app::make_app;
+use crate::app::app::emulab;
 
 fn main() -> iced::Result {
-    return make_app().run();
+    return emulab().run();
 }
