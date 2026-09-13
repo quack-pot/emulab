@@ -1,5 +1,5 @@
-mod core;
-mod nes;
+pub mod core;
+pub mod nes;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

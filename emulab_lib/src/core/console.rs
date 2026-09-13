@@ -13,7 +13,7 @@ pub trait Console {
     fn advance_frame(&mut self);
 
     /** Grabs the current framebuffer as an RGBA image. */
-    fn get_frame(&self);
+    fn get_frame(&self) -> (Box<[u8]>, u32, u32);
 
     fn load_program(&mut self, filepath: String);
 }

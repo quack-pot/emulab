@@ -10,6 +10,10 @@ const NES_MAX_PROGRAM_SIZE_BYTES: usize = 524288; // 512 KiB
 
 const NES_NTSC_FRAME_CLOCK_CYCLE_BUDGET: f64 = 29780.5; // Using a floating point to be as accurate as possible.
 
+const NES_FRAME_WIDTH: u32 = 256;
+const NES_FRAME_HEIGHT: u32 = 240;
+const NES_FRAME_RGBA_SIZE_BYTES: usize = (NES_FRAME_WIDTH * NES_FRAME_HEIGHT * 4) as usize;
+
 #[repr(u8)]
 enum StatusFlags {
     Carry = 1 << 0,
@@ -49,19 +53,20 @@ pub struct ConsoleNES {
     program_counter: u8,
 
     // Kept distinct to help with debugging later
-    work_ram: [u8; NES_WORK_RAM_SIZE_BYTES],
-    video_ram: [u8; NES_VIDEO_RAM_SIZE_BYTES],
-    sprite_ram: [u8; NES_SPRITE_RAM_SIZE_BYTES],
-    cartridge_ram: [u8; NES_MAX_CARTRIDGE_RAM_SIZE_BYTES],
+    work_ram: Box<[u8; NES_WORK_RAM_SIZE_BYTES]>,
+    video_ram: Box<[u8; NES_VIDEO_RAM_SIZE_BYTES]>,
+    sprite_ram: Box<[u8; NES_SPRITE_RAM_SIZE_BYTES]>,
+    cartridge_ram: Box<[u8; NES_MAX_CARTRIDGE_RAM_SIZE_BYTES]>,
 
-    program: [u8; NES_MAX_PROGRAM_SIZE_BYTES],
+    program: Box<[u8; NES_MAX_PROGRAM_SIZE_BYTES]>,
 
     frame_budget: f64,
+    image_rgba: Box<[u8; NES_FRAME_RGBA_SIZE_BYTES]>,
 }
 
 impl ConsoleNES {
-    pub fn new() -> Self {
-        return Self {
+    pub fn new() -> Box<Self> {
+        return Box::new(Self {
             reg_a: 0u8,
             reg_x: 0u8,
             reg_y: 0u8,
@@ -70,15 +75,34 @@ impl ConsoleNES {
             stack_pointer: 0u8,
             program_counter: 0u8,
 
-            work_ram: [0u8; NES_WORK_RAM_SIZE_BYTES],
-            video_ram: [0u8; NES_VIDEO_RAM_SIZE_BYTES],
-            sprite_ram: [0u8; NES_SPRITE_RAM_SIZE_BYTES],
-            cartridge_ram: [0u8; NES_MAX_CARTRIDGE_RAM_SIZE_BYTES],
+            work_ram: vec![0u8; NES_WORK_RAM_SIZE_BYTES]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
 
-            program: [0u8; NES_MAX_PROGRAM_SIZE_BYTES],
+            video_ram: vec![0u8; NES_VIDEO_RAM_SIZE_BYTES]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
+
+            sprite_ram: vec![0u8; NES_SPRITE_RAM_SIZE_BYTES]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
+
+            cartridge_ram: vec![0u8; NES_MAX_CARTRIDGE_RAM_SIZE_BYTES]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
+
+            program: vec![0u8; NES_MAX_PROGRAM_SIZE_BYTES]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
 
             frame_budget: 0.0f64,
-        };
+            image_rgba: utils::blank_fixed_rgba(),
+        });
     }
 }
 
@@ -89,10 +113,10 @@ impl Console for ConsoleNES {
         self.reg_x = rand::random();
         self.reg_y = rand::random();
 
-        utils::fill_random(&mut self.work_ram);
-        utils::fill_random(&mut self.video_ram);
-        utils::fill_random(&mut self.sprite_ram);
-        utils::fill_random(&mut self.cartridge_ram);
+        utils::fill_random(&mut *self.work_ram);
+        utils::fill_random(&mut *self.video_ram);
+        utils::fill_random(&mut *self.sprite_ram);
+        utils::fill_random(&mut *self.cartridge_ram);
 
         self.status = StatusFlags::InterruptDisable as u8;
         self.stack_pointer = 0xFF - 3;
@@ -117,7 +141,7 @@ impl Console for ConsoleNES {
         while instruction_time < self.frame_budget {
             let op_code = self.program[self.program_counter as usize];
 
-            // TODO: Fetch next instruction
+            // TODO: Fetch next instruction data
             instruction_time = op_code as f64 * 5.0; // TODO: Get time from instruction and CPU state
 
             // TODO: Execute the next instruction and advance the program counter as needed
@@ -126,7 +150,9 @@ impl Console for ConsoleNES {
         }
     }
 
-    fn get_frame(&self) {}
+    fn get_frame(&self) -> (Box<[u8]>, u32, u32) {
+        return (self.image_rgba.clone(), NES_FRAME_WIDTH, NES_FRAME_HEIGHT);
+    }
 
     fn load_program(&mut self, filepath: String) {}
 }

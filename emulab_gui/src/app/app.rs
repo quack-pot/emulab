@@ -1,16 +1,20 @@
-use iced::widget::pane_grid;
-use iced::widget::text_editor;
+use iced::widget::{image, pane_grid, text_editor};
 use std::time::Duration;
 
 use crate::components::panes::PaneKind;
 use crate::components::panes::editor_pane;
 use crate::components::panes::game_pane;
 
+use emulab_lib::core::console::Console;
+
 const DEFAULT_FRAME_RATE_TARGET: Duration = Duration::from_millis(1000 / 60); // 60 FPS
 const PANE_RESIZE_LEEWAY_PXS: u32 = 10;
 
 struct AppState {
     game_running: bool,
+    console: Box<dyn Console>,
+    display_framebuffer: image::Handle,
+
     panes: pane_grid::State<PaneKind>,
 
     text_content: text_editor::Content,
@@ -29,8 +33,17 @@ impl AppState {
         let (mut panes, editor_pane) = pane_grid::State::new(PaneKind::EditorPane);
         panes.split(pane_grid::Axis::Vertical, editor_pane, PaneKind::GamePane);
 
+        let console = emulab_lib::nes::make_console();
+        let display_framebuffer = {
+            let (initial_frame, frame_width, frame_height) = console.get_frame();
+            image::Handle::from_rgba(frame_width, frame_height, initial_frame)
+        };
+
         return Self {
             game_running: false,
+            console,
+            display_framebuffer,
+
             panes: panes,
 
             text_content: text_editor::Content::new(),
@@ -40,7 +53,10 @@ impl AppState {
     fn update(&mut self, message: AppMessage) {
         match message {
             AppMessage::FrameTick => {
-                // TODO: Advance the game state and update the screen image
+                self.console.advance_frame();
+                let (frame_image, width, height) = self.console.get_frame();
+                self.display_framebuffer =
+                    image::Handle::from_rgba(width, height, frame_image.to_vec());
             }
 
             AppMessage::PaneResized(event) => {
@@ -59,7 +75,7 @@ impl AppState {
                 PaneKind::EditorPane => editor_pane(&self.text_content)
                     .on_action(AppMessage::TextEdited)
                     .into(),
-                PaneKind::GamePane => game_pane(256, 240).into(),
+                PaneKind::GamePane => game_pane(&self.display_framebuffer).into(),
             };
 
             return pane_grid::Content::new(content);

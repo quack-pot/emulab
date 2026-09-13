@@ -1,7 +1,7 @@
 mod editor_pane;
 mod game_pane;
 
-use iced::widget::text_editor;
+use iced::widget::{image, text_editor};
 
 pub enum PaneKind {
     GamePane,
@@ -14,9 +14,6 @@ pub fn editor_pane<'a, Message>(
     return editor_pane::EditorPane::new(content);
 }
 
-pub fn game_pane<'a, Message>(width: u32, height: u32) -> game_pane::GamePane<'a, Message> {
-    assert!(width > 0, "Game screen width must be greater than zero.");
-    assert!(height > 0, "Game screen height must be greater than zero.");
-
-    return game_pane::GamePane::new(width, height);
+pub fn game_pane<'a, Message>(framebuffer: &'a image::Handle) -> game_pane::GamePane<'a, Message> {
+    return game_pane::GamePane::new(framebuffer);
 }
