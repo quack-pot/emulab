@@ -1,4 +1,5 @@
 mod console;
+mod instructions;
 
 use crate::core::console::Console;
 

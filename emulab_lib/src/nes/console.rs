@@ -1,6 +1,8 @@
 use crate::core::console::Console;
 use crate::core::utils;
 
+use crate::nes::instructions::InstructionSetNES;
+
 const NES_WORK_RAM_SIZE_BYTES: usize = 2048; // 2 KiB
 const NES_VIDEO_RAM_SIZE_BYTES: usize = 2048; // 2 KiB
 const NES_SPRITE_RAM_SIZE_BYTES: usize = 256; // 256 Bytes
@@ -50,7 +52,8 @@ pub struct ConsoleNES {
 
     status: u8,
     stack_pointer: u8,
-    program_counter: u8,
+    program_counter: u16,
+    mapped_program_counter: u32, // Points the real instruction (simulates mapper chip)
 
     // Kept distinct to help with debugging later
     work_ram: Box<[u8; NES_WORK_RAM_SIZE_BYTES]>,
@@ -59,9 +62,12 @@ pub struct ConsoleNES {
     cartridge_ram: Box<[u8; NES_MAX_CARTRIDGE_RAM_SIZE_BYTES]>,
 
     program: Box<[u8; NES_MAX_PROGRAM_SIZE_BYTES]>,
+    program_size: u32,
 
     frame_budget: f64,
     image_rgba: Box<[u8; NES_FRAME_RGBA_SIZE_BYTES]>,
+
+    instruction_set: InstructionSetNES,
 }
 
 impl ConsoleNES {
@@ -73,7 +79,8 @@ impl ConsoleNES {
 
             status: 0u8,
             stack_pointer: 0u8,
-            program_counter: 0u8,
+            program_counter: 0u16,
+            mapped_program_counter: 0u32,
 
             work_ram: vec![0u8; NES_WORK_RAM_SIZE_BYTES]
                 .into_boxed_slice()
@@ -99,9 +106,12 @@ impl ConsoleNES {
                 .into_boxed_slice()
                 .try_into()
                 .unwrap(),
+            program_size: 0u32,
 
             frame_budget: 0.0f64,
             image_rgba: utils::blank_fixed_rgba(),
+
+            instruction_set: InstructionSetNES::new(),
         });
     }
 }
@@ -120,7 +130,8 @@ impl Console for ConsoleNES {
 
         self.status = StatusFlags::InterruptDisable as u8;
         self.stack_pointer = 0xFF - 3;
-        self.program_counter = 0u8;
+        self.program_counter = 0u16;
+        self.mapped_program_counter = 0u32;
 
         // Keep the program in the same state (assume cartridge still in)
 
@@ -135,17 +146,29 @@ impl Console for ConsoleNES {
     }
 
     fn advance_frame(&mut self) {
-        let mut instruction_time: f64 = 0.0f64;
         self.frame_budget += NES_NTSC_FRAME_CLOCK_CYCLE_BUDGET;
 
-        while instruction_time < self.frame_budget {
-            let op_code = self.program[self.program_counter as usize];
+        loop {
+            let op_code = self.program[(self.mapped_program_counter % self.program_size) as usize];
+            let arg1 =
+                self.program[((self.mapped_program_counter + 1) % self.program_size) as usize];
+            let arg2 =
+                self.program[((self.mapped_program_counter + 2) % self.program_size) as usize];
 
-            // TODO: Fetch next instruction data
-            instruction_time = op_code as f64 * 5.0; // TODO: Get time from instruction and CPU state
+            let instruction_time = self
+                .instruction_set
+                .get_instruction_cycles(op_code, arg1, arg2);
 
-            // TODO: Execute the next instruction and advance the program counter as needed
+            if instruction_time > self.frame_budget {
+                break;
+            }
 
+            let result = self
+                .instruction_set
+                .process_instruction(op_code, arg1, arg2);
+
+            self.program_counter = result.next_program_counter;
+            self.mapped_program_counter = result.next_mapped_program_counter;
             self.frame_budget -= instruction_time;
         }
     }
